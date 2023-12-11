@@ -1,0 +1,936 @@
+---
+title: "Digital Methods project, The Kings In the Mirror Of The Funeral Sermons"
+author: "Mia Juul Beuschau"
+date: "2023-12-19"
+output: R Markdown Document
+---
+
+### Short project desription 
+
+The Danish Reformation was an era of change, signifying a fundamental departure from the Catholic Church that had historically
+influenced the country's power dynamics. At the front
+of the transformation stood Danish kings, who assumed authority over the church. Much has been written and told about the Danish
+Reformation and the reformation kings. However, the outcome of the codes in this Rmarkdown is a part of a project that seeks to
+investigate an until now nearly uncharted aspect of this historical period: how the perception and portrayal of kings changed in the
+period shortly after the Reformation.
+Based on digital tools, text mining and a data-driven analysis of two funeral sermons of Danish kings, this paper will investigate how
+the role as a “good king”, and leader of the
+church, changed during the reign of Christian IV (1588-1648), and thereby contribute to a deeper understanding of the changes initiadet
+after the introduction to the reformation in
+Denmark. Furthermore, the question about whatever it makes sense to use digital tools on 400-year-old Danish text, will be an underlying
+and natural aspect to consider in the project as wall. In this document you will find the basis for my project, i guess you could call
+it the machine room. 
+
+
+### Loading packages
+```{r setup, include=TRUE}
+library(readtext)
+library(tidyverse)
+library(tidytext)
+library(igraph)
+library(ggraph)
+library(ggplot2)
+library(here)
+```
+
+
+## Uploading data documents
+
+```{r Uploading of the funeral sermon of Christian IV, echo=TRUE}
+
+fs_chris <- readtext("Data/ligprædiken_CR_IV_ts.docx")
+fs_chris
+```
+
+```{r Uploading of the funeral sermon of Frederik II, echo=TRUE}
+
+fs_fred <- readtext("Data/frederik_II_ts.docx")
+fs_fred
+```
+
+
+# Working with the funeral sermon of Christian IV
+In the following part i will be working and fixing the funeral Sermon of Christian IV. 
+
+### Unify selected words, and cleaning the dataset
+Before making the following alterations, i have read the funeral sermons and found some words that is interesting in my analysis. Several different words were constantly written in
+two or more ways, which was both the case in the funeral sermon of Frederik II and Christian IV. Not all these words are relevant to my analysis, and because making all different
+versions of words uniform is too time consuming, I decided only to change the ones that may be relevant to my project. A word as “gud” (God) is extremely relevant, and is sometime
+spelled “gvd”, maybe just a mistake in the printing press, but because I am working with a relatively small amount of data, every word counts. 
+In the following part, i will only change words that are spelled different in their shortest form, using the str_replace_all function from the tidyverse package.
+i got insperation from this page: https://appsilon.com/stringr-examples/.
+
+
+```{r Cleaning dataset, echo=TRUE}
+
+fs_chris_fixed <- fs_chris %>%
+  mutate(text = str_replace_all(text, regex("GVD", ignore_case = TRUE), "gud")) %>%
+  mutate(text = str_replace_all(text, regex("Vnder", ignore_case = TRUE), "under")) %>%
+  mutate(text = str_replace_all(text, regex("vdi", ignore_case = TRUE), "udi")) %>%
+  mutate(text = str_replace_all(text, regex("wi", ignore_case = TRUE), "vi")) %>%
+  mutate(text = str_replace_all(text, regex("dauid", ignore_case = TRUE), "david")) %>%
+  mutate(text = str_replace_all(text, regex("vly", ignore_case = TRUE), "uly")) %>%
+  mutate(text = str_replace_all(text, regex("offue", ignore_case = TRUE), "offve")) %>%
+  mutate(text = str_replace_all(text, regex("wly", ignore_case = TRUE), "uly")) %>%
+  mutate(text = str_replace_all(text, regex("Arffue", ignore_case = TRUE), "arffve")) %>%
+  mutate(text = str_replace_all(text, regex("JESV", ignore_case = TRUE), "jesu")) %>%
+  mutate(text = str_replace_all(text, regex("euig", ignore_case = TRUE), "evig")) %>%
+  mutate(text = str_replace_all(text, regex('[.,/;:]', ignore_case = TRUE), ' ')) %>% 
+  mutate(text = str_replace_all(text, regex('[0-9]', ignore_case = TRUE), ''))
+```
+
+
+The use of 'ignore_case=TRUE' in the 'mutate' strings ensures that the search is case-insensitive. Additionally, it allows me to change various word variations, 
+such that replacing 3 letters, etc. 'vnd' with 'und' modifies both 'under' and 'undervise' (teaching). This approach enables me to make substantial word changes with just a few
+sentences.
+
+This preprocessing step is crucial because, when later searching for words and creating visualizations, I am searching for the shortest versions of the words, to include variations
+in the suffixes. This means that a word like 'guder' will be included, when seaching for the word "gud", but if I skip the correction of 'gvd', 'gvder' would not be counted.
+Therefore, ensuring the uniformity of the base form of words is important. 
+Also, In the same pipe I am removing all the punctuation marks, and all the numbers as well. 
+
+
+
+### Turning the funeral sermon of Christian IV into a tidy-format 
+
+After a few different attempts, I found out that to improve the tidy text dataset, it would be helpful to first split the cleaned funeral sermons into lines using the 'tidytext' package, so that is what i am doing in the following coding section 
+
+```{r Splitting the cleaned funeral sermon of Christian IV up in lines, echo=TRUE}
+
+fs_chris_split <- fs_chris_fixed %>%
+  mutate(text_full = str_split(text,pattern = '\\n')) %>%
+  unnest(text_full) %>%
+  mutate(text_full=str_trim(text_full))
+glimpse(fs_chris_split)
+```
+I am making a new column named: text_full, here i split the text in the original text-column by the use of the str_split function and
+seperate the text by line breaks (\\n).
+I am then using the unnest-function to convert the text_full column to rows. Then i am using the mutate-function to remove the extra
+spaces in the start and ending off each textpiece
+in the text_full column by str_trim
+
+Now i will split the sentences in the text_full column further into words, so that one row contains one word, trying to fullfil the
+demands for organicing in a tidy text format.
+
+```{r Splitting the lines up in words , tidytext, echo=TRUE}
+
+fs_chris_word <- fs_chris_split %>%
+  unnest_tokens(word,text_full)
+glimpse(fs_chris_word)
+```
+
+
+# Working with the funeral sermon of Frederik II
+
+In the following part i will be working and fixing the funeral Sermon of Frederik II, just like i did before with the Christian IV funeral sermon
+
+### Unifying selected words, and cleaning the dataset
+The following pipe is the same i as the one i was using to clean the words in the funeral sermon of Christian IV, but when i made the pipe i included words that were spelled
+differently in the funeral sermon of Frederik II, in that way i make sure that words i may have missed were spelled differently in one of the sermons, also gets corrected. Using the
+same pipe secures uniformity in the data processing.
+An also many of the same words was spelled differently throughout the two texts, probably because of the way of shifting around between "v and u", and "i and j" that was common around the 17th-century
+
+
+```{r Initial cleaning of the funeral sermon of Frederik II, echo=TRUE}
+
+fs_fred_fixed <- fs_fred %>%
+  mutate(text = str_replace_all(text, regex("GVD", ignore_case = TRUE), "gud")) %>%
+  mutate(text = str_replace_all(text, regex("Vnder", ignore_case = TRUE), "under")) %>%
+  mutate(text = str_replace_all(text, regex("vdi", ignore_case = TRUE), "udi")) %>%
+  mutate(text = str_replace_all(text, regex("wi", ignore_case = TRUE), "vi")) %>%
+  mutate(text = str_replace_all(text, regex("dauid", ignore_case = TRUE), "david")) %>%
+  mutate(text = str_replace_all(text, regex("vly", ignore_case = TRUE), "uly")) %>%
+  mutate(text = str_replace_all(text, regex("offue", ignore_case = TRUE), "offve")) %>%
+  mutate(text = str_replace_all(text, regex("wly", ignore_case = TRUE), "uly")) %>%
+  mutate(text = str_replace_all(text, regex("Arffue", ignore_case = TRUE), "arffve")) %>%
+  mutate(text = str_replace_all(text, regex("JESV", ignore_case = TRUE), "jesu")) %>%
+  mutate(text = str_replace_all(text, regex("euig", ignore_case = TRUE), "evig")) %>%
+  mutate(text = str_replace_all(text, regex('[.,/;:]', ignore_case = TRUE), ' ')) %>% 
+  mutate(text = str_replace_all(text, regex('[0-9]', ignore_case = TRUE), ''))
+
+```
+
+
+### Splitting the Funeral sermon of Frederik II
+As explained before, i found out that splitting the funeral sermons into lines first, would help in the further word segmentation
+
+```{r Splitting the text into lines, echo=TRUE}
+
+fs_fred_split <- fs_fred_fixed %>%
+  mutate(text_full = str_split(text,pattern = '\\n')) %>%
+  unnest(text_full) %>%
+  mutate(text_full = str_trim(text_full))
+glimpse(fs_fred_split)
+```
+
+I am doing the same as above, using the unnest_tokens function to split the sentences from the text_full column into words 
+
+```{r Splitting the lines up in words, tidytext, echo=TRUE}
+
+fs_fred_word <- fs_fred_split %>%
+  unnest_tokens(word,text_full)
+glimpse(fs_fred_word)
+```
+
+
+# Working with the two tidy texts 
+Now i have two data sets with all the words from the two sermons, but some problems have to be solved before the analysis and visualization process
+
+
+### Making the data comparabel
+If you want to create valid visualizations, one key aspect to ensure is the comparability of the data. Looking at the total numbers of words in the funeral sermons (the total number of observations in fs_fred_word and fs_chris_word) it becomes clear that the sermon of Frederik II, is 5989 words shorter than the sermon of chrsitian IV.
+
+```{r Words difference}
+
+21316-15327
+```
+
+
+Therefore, i will use the sample function, to make a random sample of both text, containing 15000 words/observations
+I found some inspiration here: https://www.geeksforgeeks.org/how-to-generate-a-sample-using-the-sample-function-in-r/
+
+
+
+```{r Creating a sample of the words in the funeral sermon of Christian IV and the sermon of Frederik II}
+
+chris_sampled <- data.frame(word = fs_chris_word$word[sample(1:length(fs_chris_word$word), 15000)])
+fred_sampled <- data.frame(word = fs_fred_word$word[sample(1:length(fs_fred_word$word), 15000)])
+
+# now i will count how many times each unique words occurs in both the sermons, using the count function
+
+chris_sampled_counts <- chris_sampled %>%
+  count(word)
+
+fred_sampled_counts <- fred_sampled %>%
+  count(word)
+
+# lets take a look at the words that occurs the most
+
+chris_sampled_counts %>% 
+  arrange(desc(n)) %>%
+  head(20)
+
+
+
+```
+
+### Combining the samples
+
+When looking at the word counts, it becomes clear that I need to create a stopword list. By initially merging the two sets of word
+samples and then calculating the total word frequency across both sermons, followed by sorting them based on the most frequently
+occurring words, I can create a stopword list that encompasses both sermons. Therefore, I will begin the process of combining the
+samples, which will also simplify the visualization process
+
+
+```{r Combining the date in one dataset}
+
+combined_data <- full_join(fred_sampled_counts, chris_sampled_counts, by = "word") %>% 
+  rename(frederik_word_counts = n.x) %>% 
+  rename(christian_word_counts = n.y)
+
+colnames(combined_data)
+```
+
+
+I will now create a now column, based on the sum of the words counts in both sermons, using the rowSums function. Using both sermons to create a stopwordlist, is helpfull because of the variation of spelling 
+
+```{r Preparing for the stopword list}
+
+combined_data$sum_counts <- rowSums(combined_data[, c("frederik_word_counts", "christian_word_counts")], na.rm = TRUE)
+
+# Arranging the data by the highest word counts in the 'sum_counts' column
+combined_data <- combined_data %>% 
+  arrange(desc(sum_counts))
+
+combined_data%>% 
+  head(20)
+  
+
+```
+
+As it now is visible, each variable has its own column, and each observation has its own row. This format makes it easier to work with
+and analyze data, as it follows a clear and structured form where the information is organized in a table. Also a new column has been
+made with the sum of the counts of each word in the different sermons.
+but more important, the word column has been sorted after the value in the sum_counts column, in the dataset combined_data
+
+### Creating and removing stopwords
+Again it is pretty clear that it would be necesarry to remove all the stop words, but the spelling of 17'th century old danish text is not the same as today, and a stopwordlist with these old words does not exist. Therefore i will partially use R to create one. 
+I will take the list of the most frequent words across the two sermons, calculated before, and then manually sort the list in Excel, because some words like "gud" [englis god] has a high frequency, but is relevant to my further analysis. 
+
+Now i will take the word column which i arranged after sum_counts before, and extract it from the combined_data dataset
+
+```{r Extract the word column.}
+
+word_column <- combined_data %>% 
+  select(word)
+
+```
+
+I will take the first 200 words, insert them into excel, and then manually remove interesting words from the list. 
+I ended up removing the following words: 
+
+From, gud, guds, herre, naade, david, herren, mand, gode, konge, konning, konge, stor, ære, fader, kong, første, fred, god, raad, hertug, ord
+mayst, hierte, hellige, kongelig, høy, høye, søn, unge, fromme, herris, største, høyborne, glæde, danmarckis, undersaatter, allernaadigste
+naadige, regiering, propheten, salig
+
+
+
+#### Loading stopwordlist
+After the alterations in Excel, i can upload the Excel file into R
+
+```{r Loading stopwordlist}
+
+stop_word <- read_delim("Data/stop_word_list.csv", delim = ";", col_types = cols(.default = "c")) %>% 
+  filter(!is.na(word)) %>%
+  select(word)
+stop_word
+
+```
+
+
+
+#### Removing the stopwords
+
+Now i will remove the stopwords from the samples
+
+```{r Removing stopwords from the samples}
+
+combined_filtered <- combined_data %>% 
+  filter(!word %in% stop_word$word) %>% 
+  arrange(desc(sum_counts))
+
+combined_filtered%>% 
+  head(20)
+
+```
+
+
+# Comparing and visualizing
+In this section i will start using the data to make visualizations.
+In the following part i will be looking at, the most common words in the funeral sermons, after i have removed the stopwords
+
+### Looking at the most common words in each funeral sermon sampel
+
+To look at the 20 most common words i will extract the word column and the counts from each of the two sermons, and thereafter arrange
+them from higest to lowest, and then using the
+head() function, which we worked with in class, taking the 20 most common words. 
+I am Coloring the graphs, and the colors will be consistent, so that the word counts from Christian IV's funeral sermon always will be
+blue, and counts from Frederik II will be
+consistently red. 
+
+
+```{r looking at top 20 most common words, Christian IV}
+
+# Christian IV
+chris_top_20_words <- combined_filtered %>%
+  select(word,christian_word_counts) %>%
+  arrange(desc(christian_word_counts)) %>%
+  head(20)
+
+chris_top_20_words_gg <- chris_top_20_words%>%
+  ggplot(aes(x=word,y=christian_word_counts))+
+  geom_col(fill = "blue") +
+  theme(axis.text.x=element_text(angle=90,vjust=0.5))+
+  labs(title="The Most Common Words In The Funeral Sermon Of Christian IV",x="Top 20 most common words (after removing stopwords)", y= "Number of times the word occurs")+
+  ylim(0, 160)
+
+chris_top_20_words_gg
+
+# Save it in the visualizations folder
+ggsave(plot = chris_top_20_words_gg, 
+       here("visualizations","chris_top_20_words.png"), 
+       height = 5, 
+       width = 8)
+
+```
+
+
+I will be doing the same to the sermon of Frederik II.
+i am using ylim() to set the y-axis limits to be the same in both plots, because it ensures that the y-axis scales are identical, making it easier to compare word counts between the two sermons.
+
+```{r looking at top 20 most common words, Frederik II}
+
+# Frederik II
+fred_top_20_words <- combined_filtered %>%
+  select(word,frederik_word_counts) %>%
+  arrange(desc(frederik_word_counts)) %>%
+  head(20)
+
+fred_top_20_words_gg <- fred_top_20_words%>%
+  ggplot(aes(x=word,y=frederik_word_counts)) +
+  geom_col(fill = "red") +
+  theme(axis.text.x=element_text(angle=90,vjust=0.5)) +
+   labs(title="The Most Common Words In The Funeral Sermon Of Frederik II",x="Top 20 most common words (after removing stopwords)", y= "Number of times the word occurs") +
+  ylim(0, 160)
+  
+fred_top_20_words_gg
+
+
+# Save it
+ggsave(plot = fred_top_20_words_gg, 
+       here("visualizations","fred_top_20_words.png"), 
+       height = 5, 
+       width = 8)
+
+```
+
+
+
+
+### Comparing word categories
+To find out how the ideal king's role changed during the reign of Christian IV, I will use and create visualizations and plots for different word categories. To create these 
+categories, I read both of the sermons and took notes in between, jotting down words that might be relevant and be a part of different gruops.
+
+To find all the variations of the words, I will use the shortest form of each word so that different suffixes are also counted. I will be examining words related to:
+
+  - Titles of the kings (the names and titles used to address the king).
+  
+  - Person Traits, adjectives used to descripe the kings personality
+  
+  - The king's role as a church leader.
+  
+  - Words concerning the king's education.
+  
+  - War and crisis
+  
+  - Word regarding the status of the king
+  
+  - Subjects' groups, other groups/persons mentioned in the text
+
+This approach will help me compare and visualize how the perception of an ideal king's role evolved during Christian IV's reign in various contexts and aspects.
+
+
+#### Words regarding to Religion
+
+In the following section, i will be looking at words, regarding the church, 
+But first i will have to find all the versions of the different words i am interested in using ignore.case = TRUE, so that e.g. both "kircke" [church] and "kircker" [churches] gets
+included. I will be grouping all the variations under one term, using the grepl() function
+
+```{r Grouping words related to religion}
+
+church_group_data <- combined_filtered %>%
+  mutate(grouped_church_word = case_when(
+  grepl("salig", word, ignore.case = TRUE) ~ "salig",
+  grepl("psalme", word, ignore.case = TRUE) ~ "psalme",
+  grepl("gudfrycti", word, ignore.case = TRUE) ~ "gudfryctig",
+  grepl("gud", word, ignore.case = TRUE) ~ "gud",
+  grepl("isreal", word, ignore.case = TRUE) ~ "isreal",
+  grepl("synd", word, ignore.case = TRUE) ~ "synd",
+  grepl("sathan|satan", word, ignore.case = TRUE) ~ "sathan",
+  grepl("kirck", word, ignore.case = TRUE) ~ "kirck",
+  grepl("salomon", word, ignore.case = TRUE) ~ "salomon",
+  grepl("jesu", word, ignore.case = TRUE) ~ "jesu",
+  grepl("eliam", word, ignore.case = TRUE) ~ "eliam",
+  grepl("elizæus", word, ignore.case = TRUE) ~ "elizæus",
+  grepl("hellig", word, ignore.case = TRUE) ~ "hellig",
+  grepl("from", word, ignore.case = TRUE) ~ "from",
+  grepl("prophet", word, ignore.case = TRUE) ~ "prophet",
+  grepl("christel", word, ignore.case = TRUE) ~ "christelig",
+  grepl("heden", word, ignore.case = TRUE) ~ "hedensk",
+  word %in% c("høyborn", "høybaarn") ~ "høyborne",
+  TRUE ~ "andre"
+  ))
+```
+
+
+In the following coding section i will summarize the words in each group made before in "grouped_church_world" for Frederik II and Christian IV and removing rows were "grouped_church_word" er "andre" [others] (in the section above i made a group for all other words in the data tabel)
+
+
+```{r Summarizing and Filtering Grouped Counts}
+
+summary_church <- church_group_data %>%
+  group_by(grouped_church_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV  = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_church_word != "andre")
+
+summary_church
+
+```
+
+
+Now I can create a graph, which will make it easier to distinguish between the word counts in each sermon. I choose to place the bars on top of each other, to make it more clear which sermon the words occurs most in. To make it easier to read the words i used the cord_flip() function to flip the y and x axis
+
+```{r}
+
+religion_words <- ggplot(summary_church, aes(x = grouped_church_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Related to Religion in the Funeral Sermons", x = "Selected words", y = "Number of times the word occurs") +
+  labs(fill = "Word Counts in:") +
+  theme_minimal()+
+  coord_flip()
+religion_words
+
+# save it
+
+ggsave(plot = religion_words, 
+       here("visualizations","religion_words.png"), 
+       height = 5, 
+       width = 8)
+
+
+```
+
+
+
+
+
+#### Titles of the Kings
+In this part i will look into words regarding the titles of the kings 
+
+```{r Grouping words related to the titles of the kings}
+
+titles_group_data <- combined_filtered %>%
+  mutate(grouped_titles_word = case_when(
+  grepl("fader", word, ignore.case = TRUE) ~ "fader",
+  grepl("fyrst", word, ignore.case = TRUE) ~ "fyrste",
+  grepl("ridder", word, ignore.case = TRUE) ~ "ridder",
+  grepl("mayst|maiett", word, ignore.case = TRUE) ~ "mayst",
+  word %in% c("kong", "konning") ~ "konge",
+  word %in% c("herre", "herri") ~ "herre",
+  TRUE ~ "andre"
+  ))
+
+
+```
+
+
+Again i use the words to make groups with all the suffiks variations 
+
+```{r Summarizing and counting words related to kingly titles}
+
+summary_titles <- titles_group_data %>%
+  group_by(grouped_titles_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_titles_word != "andre")
+
+summary_titles
+
+```
+
+
+
+
+```{r Making a graph for words regarding the titles of the kings in the funeral sermons}
+
+titles_words <- ggplot(summary_titles, aes(x = grouped_titles_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Titles of the Kings in the Funeral Sermons", x = "Selected words", y = "Number of times the word occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal()+
+  coord_flip()
+
+titles_words
+
+# save it
+ggsave(plot = titles_words, 
+       here("visualizations","titles_words.png"), 
+       height = 5, 
+       width = 8)
+
+
+
+```
+
+
+
+
+
+#### Personal traits
+
+
+```{r Grouping words related to Personal traits}
+
+traits_group_data <- combined_filtered %>%
+  mutate(grouped_traits_word = case_when(
+  grepl("from", word, ignore.case = TRUE) ~ "from",
+  grepl("allernaadig", word, ignore.case = TRUE) ~ "allernaadig",
+  grepl("naadig", word, ignore.case = FALSE) ~ "naadig",
+  grepl("mectig", word, ignore.case = TRUE) ~ "mectig",
+  grepl("viss", word, ignore.case = TRUE) ~ "viss",
+  grepl("retfærd|retfer", word, ignore.case = TRUE) ~ "retfærdig",
+  grepl("barmhiertig", word, ignore.case = TRUE) ~ "barmhiertig",
+  grepl("dyd", word, ignore.case = TRUE) ~ "dydig",
+  grepl("styrck", word, ignore.case = TRUE) ~ "styrcke",
+  grepl("edel|edle", word, ignore.case = TRUE) ~ "edel",
+  grepl("erlig|ærlig", word, ignore.case = TRUE) ~ "erlig",
+  grepl("flitt", word, ignore.case = TRUE) ~ "flittig",
+  grepl("gaffmild", word, ignore.case = TRUE) ~ "gaffmild",
+  grepl("god", word, ignore.case = TRUE) ~ "god",
+  grepl("modig", word, ignore.case = TRUE) ~ "modig",
+  grepl("mild", word, ignore.case = TRUE) ~ "mild",
+  grepl("ydmyg", word, ignore.case = TRUE) ~ "ydmyg",
+  grepl("elskelig", word, ignore.case = TRUE) ~ "elskelig",
+  grepl("svag", word, ignore.case = TRUE) ~ "svag",
+  grepl("oprict", word, ignore.case = TRUE) ~ "oprict",
+  grepl("gudfrycti", word, ignore.case = TRUE) ~ "gudfrycti",
+  grepl("sactmodi", word, ignore.case = TRUE) ~ "sactmod",
+  grepl("taalmodi", word, ignore.case = TRUE) ~ "taalmodig",
+  grepl("klog", word, ignore.case = TRUE) ~ "klog",
+  grepl("salig", word, ignore.case = TRUE) ~ "salig",
+  grepl("stor", word, ignore.case = TRUE) ~ "stor",
+  TRUE ~ "andre"
+  ))
+```
+
+
+Again i use the words to make differnt groups, and summeraize and count the data into one table
+
+```{r Summarizing and Filtering words regarding Personal Traits}
+
+summary_traits <- traits_group_data %>%
+  group_by(grouped_traits_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_traits_word != "andre")
+
+summary_traits
+
+```
+
+
+
+```{r making a visualisation regarding the personal traits used to describe the kings}
+
+traits_words <- ggplot(summary_traits, aes(x = grouped_traits_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Related to Personal Traits in the Funeral Sermons", x = "Selected words", y = "Number of times the word occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal()+
+  coord_flip()
+
+traits_words
+
+# saving it
+ggsave(plot = traits_words, 
+       here("visualizations","traits_words.png"), 
+       height = 5, 
+       width = 8)
+
+```
+
+
+
+#### Words about the king's education and knowledge.
+
+
+```{r making groups of words related to the kings education and knowledge}
+
+education_group_data <- combined_filtered %>%
+  mutate(grouped_education_word = case_when(
+  grepl("lærd", word, ignore.case = TRUE) ~ "lærd",
+  grepl("klog", word, ignore.case = TRUE) ~ "klog",
+  grepl("viss", word, ignore.case = TRUE) ~ "viss",
+  grepl("skole", word, ignore.case = TRUE) ~ "skole",
+  grepl("viss", word, ignore.case = TRUE) ~ "viss",
+  grepl("latin", word, ignore.case = TRUE) ~ "latin",
+  grepl("sprog", word, ignore.case = TRUE) ~ "sprog",
+  grepl("bog", word, ignore.case = TRUE) ~ "bog",
+  grepl("læs", word, ignore.case = TRUE) ~ "læs",
+  grepl("lære", word, ignore.case = TRUE) ~ "lære",
+  grepl("undervis", word, ignore.case = TRUE) ~ "undervis",
+  TRUE ~ "andre"
+  ))
+```
+
+
+Now i make groups again to gatch the different suffiks under one word.
+
+```{r Summarizing and Filtering Grouped Words about education and knowledge}
+
+summary_education <- education_group_data %>%
+  group_by(grouped_education_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_education_word != "andre")
+
+summary_education
+
+```
+
+
+  
+  
+```{r making a plot with words regarding education}
+
+education_words <- ggplot(summary_education, aes(x = grouped_education_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Related to Education and Knowledge in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal()+
+  coord_flip()
+
+education_words
+
+# saving it
+ggsave(plot = education_words, 
+       here("visualizations","education_words.png"), 
+       height = 5, 
+       width = 8)
+
+```
+
+
+
+
+
+
+#### Looking at words about war and Foreign Policy
+
+In this section i will be making visualizations with words related to war and crisis, this is important because in both Christian and
+Frederik's periode of reign, Denmark was involved in several wars. And it is exiting to see if the picture has changed.
+
+```{r Grouping Adjectives about war and crisis}
+
+war_group_data <- combined_filtered %>%
+  mutate(grouped_war_word = case_when(
+    grepl("ridder", word, ignore.case = TRUE) ~ "ridder",
+    grepl("feide", word, ignore.case = TRUE) ~ "feide",
+    grepl("blodebad", word, ignore.case = TRUE) ~ "blodebad",
+    grepl("farlig", word, ignore.case = TRUE) ~ "farlig",
+    grepl("blodebad", word, ignore.case = TRUE) ~ "blodebad",
+    grepl("straf", word, ignore.case = TRUE) ~ "straf",
+    grepl("styrcke", word, ignore.case = TRUE) ~ "styrcke",
+    word %in% c("modig", "modige") ~ "modig",
+    grepl("krig", word, ignore.case = TRUE) ~ "krig",
+    grepl("modgang", word, ignore.case = TRUE) ~ "modgang",
+    grepl("strid", word, ignore.case = TRUE) ~ "strid",
+    grepl("hær", word, ignore.case = TRUE) ~ "hær",
+    grepl("soldat", word, ignore.case = TRUE) ~ "soldat",
+    grepl("sverd", word, ignore.case = TRUE) ~ "sverd",
+    grepl("ufred", word, ignore.case = TRUE) ~ "ufred",
+    grepl("kamp", word, ignore.case = TRUE) ~ "kamp",
+    grepl("fred", word, ignore.case = TRUE) ~ "fred",
+    TRUE ~ "andre"
+  ))
+```
+
+
+Again i use the words to make differnt groups
+
+```{r Summarizing and Filtering Grouped war word counts}
+
+summary_war <- war_group_data %>%
+  group_by(grouped_war_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_war_word != "andre")
+
+summary_war
+
+```
+
+
+
+```{r  Visualizing words about war and Foreign Policy }
+
+war_words <- ggplot(summary_war, aes(x = grouped_war_word)) +
+   geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Related to War and Foreign Policy in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word counts in") +
+  theme_minimal()+
+  coord_flip()
+
+war_words
+
+# saving it
+ggsave(plot = war_words, 
+       here("visualizations","war_words.png"), 
+       height = 5, 
+       width = 8)
+
+
+
+```
+
+
+
+#### Subjects' groups, other persons
+
+How was the kings subjects portrayed?
+
+
+```{r Grouping words about Subjects and other groups in the funeral sermons}
+
+subjects_group_data <- combined_filtered %>%
+  mutate(grouped_subjects_word = case_when(
+    grepl("keyser", word, ignore.case = TRUE) ~ "keyser",
+    grepl("folk", word, ignore.case = TRUE) ~ "folk",
+    grepl("mand|mænd", word, ignore.case = TRUE) ~ "mand",
+    grepl("undersaat", word, ignore.case = TRUE) ~ "undersaat",
+    grepl("regier|regærin", word, ignore.case = TRUE) ~ "regiering",
+    grepl("bønde|bonde", word, ignore.case = TRUE) ~ "bønder",
+    grepl("borger", word, ignore.case = TRUE) ~ "borger",
+    grepl("fatti", word, ignore.case = TRUE) ~ "fatti",
+    grepl("quind", word, ignore.case = TRUE) ~ "quinde",
+    grepl("adel", word, ignore.case = TRUE) ~ "adel",
+    grepl("klerck", word, ignore.case = TRUE) ~ "klerck",
+    grepl("indbyg", word, ignore.case = TRUE) ~ "indbyggere",
+    grepl("almue", word, ignore.case = TRUE) ~ "almue",
+    grepl("klerck", word, ignore.case = TRUE) ~ "klerck",
+    TRUE ~ "andre"
+  ))
+```
+
+
+
+
+```{r Summarizing and Filtering Groups about Subjects and groups}
+
+summary_subjects <- subjects_group_data %>%
+  group_by(grouped_subjects_word) %>%
+  summarize(Frederik_II = sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_subjects_word != "andre")
+
+summary_subjects
+
+```
+
+
+
+```{r looking at groups under the king, subjects}
+
+
+subjects_words <- ggplot(summary_subjects, aes(x = grouped_subjects_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge2(width = 0.9)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge2(width = 0.9)) +
+  scale_fill_manual(values = c("Frederik_II" = "red", "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Regarding Groups and Subjects of the Kings in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word counts in") +
+  theme_minimal()+
+  coord_flip()
+
+subjects_words
+
+
+# saving it
+ggsave(plot = subjects_words, 
+       here("visualizations","subjects_words.png"), 
+       height = 5, 
+       width = 8)
+
+
+```
+
+
+
+
+
+
+
+
+#### Words presenting the status of the king
+Christian IV was a very famous danish king, and many times his wealth and high status has been in focus, therefore it is interessting how and which words was used to describe the status of the king
+
+
+```{r Grouping Adjectives about the status of the kings}
+
+
+status_group_data <- combined_filtered %>%
+  mutate(grouped_status_word = case_when(
+    grepl("guld", word, ignore.case = TRUE) ~ "guld",
+    grepl("rigdom", word, ignore.case = TRUE) ~ "rigdom",
+    grepl("høyloffl", word, ignore.case = TRUE) ~ "høylofflig",
+    grepl("ophøy", word, ignore.case = TRUE) ~ "ophøyet",
+    grepl("berøm", word, ignore.case = TRUE) ~ "berømt",
+    grepl("høyborn|høybaarn", word, ignore.case = TRUE) ~ "høyborn",
+    grepl("mectig", word, ignore.case = TRUE) ~ "mectig",
+    TRUE ~ "andre"
+  ))
+```
+
+
+
+
+```{r Gathering the words under each group}
+
+
+summary_status <- status_group_data %>%
+  group_by(grouped_status_word) %>%
+  summarize(Frederik_II= sum(frederik_word_counts, na.rm = TRUE), Christian_IV = sum(christian_word_counts, na.rm = TRUE)) %>% 
+  filter(grouped_status_word != "andre")
+
+summary_status
+
+```
+
+
+
+```{r First glimps of the words used to describe the status of the kings}
+
+
+ggplot(summary_status, aes(x = grouped_status_word)) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II"), position = position_dodge(width = 0.5)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV"), position = position_dodge(width = 3.0)) +
+  scale_fill_manual(values = c("Frederik_II" = alpha("red", 0.7), "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Used to Describe the Status of the Kings in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal() +
+  coord_flip()
+
+```
+
+
+In the plot above, there are some problems - because the majority of words occurred most frequently in Christian IV's funeral sermon, and therefore the red color became is challenging to discern. While I aimed to uphold a uniform visual style across all my visualizations, it is crucial in effective data visualization to guarantee that the information remains clear and easily comprehensible. Therefore i will try to change the graph.
+I will change the way the bars overlap:
+
+```{r Trying to make another visualization}
+
+
+ggplot(summary_status, aes(x = grouped_status_word)) +
+  geom_col(aes(y = Christian_IV, fill = "Christian_IV")) +
+  geom_col(aes(y = Frederik_II, fill = "Frederik_II")) +
+  scale_fill_manual(values = c("Frederik_II" = alpha("red",0.7), "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Used to Describe the Status of the Kings in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal() +
+  coord_flip()
+
+
+
+```
+
+
+But this graph is also bad, now you don't now if the blue color goes all the way back to 0 word counts, or just starts were the red color ends. Also you dont know how many times the word "høylofflig" appears in the funeral sermon of Christian IV. (This graph is also not good) Therefore again i will try to make another one, where you can see were the colors starts - and where the other one ends:
+
+```{r Trying to make the visualisation better}
+
+status_words <- ggplot(summary_status, aes(x = grouped_status_word)) +
+  geom_bar(aes(y = Christian_IV, fill = "Christian_IV"), stat = "identity", width = 0.2) +
+  geom_bar(aes(y = Frederik_II, fill = "Frederik_II"), stat = "identity", width = 0.4) +
+  scale_fill_manual(values = c("Frederik_II" = alpha("red", 0.7), "Christian_IV" = alpha("blue", 0.7))) +
+  labs(title = "Words Used to Describe the Status of the Kings in the Funeral Sermons", x = "Selected words", y = "Number of times the words occurs") +
+  labs(fill = "Word Counts in") +
+  theme_minimal() +
+  coord_flip()
+
+status_words
+
+# saving it
+ggsave(plot = status_words, 
+       here("visualizations","status_words.png"), 
+       height = 5, 
+       width = 8)
+
+
+```
+
+This graph is much better, now you can better distinguish between the wordcounts, and see the data from Frederik IIs sermon
+
+
+
+
+
+Thank you for looking at my project, for another file-format look in my Github repository, in the "My Final Project folder"
+https://github.com/Digital-Methods-HASS/au728030_beuschau_mia/tree/main
+
+
+
+
+
