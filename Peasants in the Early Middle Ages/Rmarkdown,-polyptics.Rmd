@@ -1,0 +1,214 @@
+---
+title: "Peasant main document"
+author: "Mia Juul Beuschau"
+date: "2024-04-23"
+output: html_document
+---
+
+### Loading packages
+```{r setup, include=TRUE}
+library(readtext)
+library(tidyverse)
+library(tidytext)
+library(igraph)
+library(readxl)
+library(ggraph)
+
+```
+
+
+
+# Peasant and social-structures within the estate of Villaris 
+
+```{r Uploading dataset from Breve VII, Villaris}
+Data <- read_xlsx("data/polyptics_as_evidents.xlsx")
+Data
+```
+
+
+
+```{r making uniform land meassures}
+
+data_1 <- mutate(Data, total_land = (meadow_aripennum*(1/9))+arable_land_bun_antsigam+(vineyard_aripennum*(1/9)))
+data_1
+
+data_3 <- mutate(data_1, LPP =total_land/household_members) #LPP stand for land pr. person, and is the total_land calculated in data_1 divided with number of housholdmembers
+data_3
+
+
+```
+
+
+
+
+
+```{r looking at land householdmembers}
+A <- ggplot(data_3, aes(x = number, y = LPP)) +
+  geom_bar(stat = "identity", fill = "blue") +  # Brug stat = "identity" for at bruge værdierne direkte
+  labs(x = "Number of mentioned person in document", y = "Bunuarium Land per household member") +  # Tilføj akseetiketter
+  theme_minimal() +
+  coord_flip()
+
+print(A)
+ggsave("my_plot.png", plot = A)
+```
+
+
+```{r}
+names(data_3)[names(data_3) == "social status"] <- "social_status"
+
+```
+
+
+
+```{r social status patterns}
+
+
+# Erstat kategoriske værdier med numeriske værdier
+data_3$social_status_numeric <- as.numeric(factor(data_3$social_status, levels = c("colona", "servus","ancilla")))
+
+
+
+B <- barplot(data_3$social_status_numeric, 
+        names.arg = data_3$number, 
+        horiz = TRUE, 
+        col = c("skyblue", "lightgreen", "pink"), 
+        main = 'Social Status of Individuals - Patterns', 
+        xlab = 'Social status', 
+        ylab = 'Number of mentioned person in document',
+        ylim = c(0, 200),
+        xlim = c(0, 4),
+        axisnames = TRUE)
+
+
+# Tilføj titler til akserne
+axis(side = 1, at = 1:3, labels = c("Colona/Colonus", "Servus", "Ancilla"), las = 0, padj = 1, cex.axis = 0.8, tck = 0)
+
+print(B)
+ggsave("my_plot2.png", plot = B)
+
+
+```
+
+
+
+
+
+
+
+```{r seeing if there are any patterns }
+ggplot(data_3, aes(x = number, y = LPP)) +
+  geom_bar(stat = "identity", fill = "skyblue") +  
+  geom_smooth(method = "loess", color = "red", se = FALSE) +# Tilføj en rød stiplet linje (lineær model)
+  labs(x = "The number of the individual persons in breve of Villaris", y = "Bunuarium land per household member") +  
+  theme_minimal() +  
+  coord_flip() +
+  theme(
+    plot.margin = margin(1, 1, 1, 3, "cm"),  # Juster margener
+    axis.text.y = element_text(size = 10)  # Juster størrelsen på Y-akse teksten
+  )
+```
+
+
+
+
+
+## any pattern in amount of houshold member
+
+
+
+```{r looking at householdmembers}
+C <- ggplot(data_3, aes(x = number, y = household_members)) +
+  geom_bar(stat = "identity", fill = "red") +  # Brug stat = "identity" for at bruge værdierne direkte
+  labs(x = "Number of mentioned person in document", y = "number of housholdmembers") +  # Tilføj akseetiketter
+  theme_minimal() +
+  coord_flip()
+
+print(C)
+```
+
+
+
+# kigger på børn og kvinder
+
+```{r jeg samler alle kvinderne i et nyt datasæt}
+
+data_women <- subset(data_3, gender == "W")
+data_women
+
+
+```
+
+```{r sorting the data}
+women_data_sorted <- data_women %>%
+  mutate(kids = ifelse(is.na(kids), 0, kids)) %>%
+  arrange(kids)
+
+women_data_sorted
+```
+
+
+
+
+
+```{r looking for patters in realtion to land mass and number of kids}
+WK <-ggplot(women_data_sorted, aes(x = kids, y = LPP)) +
+  geom_point(color = "blue", alpha = 0.6) +  
+  geom_smooth(method = "lm", color = "red", se = FALSE) + 
+  labs(x = "Number of registered kids/woman", y = "Bunuaria of arable land (amount pr. registred person in the individual houshold)") +   theme_minimal()
+
+#Udskriv plottet
+print(WK)
+
+# Calculation of the R² for the linear regression
+model <- lm(LPP ~ kids, data = women_data_sorted)
+summary(model)$r.squared
+```
+
+
+Om en R²-værdi på 0,23 er dårlig eller god, afhænger af konteksten og de specifikke data og variabler, du arbejder med. Generelt set kan en R²-værdi på 0,23 betragtes som rimelig, men det afhænger også af, hvad der forventes eller hvad der er typisk for lignende studier eller sammenhænge.
+
+I nogle tilfælde kan en R²-værdi på 0,23 være tilstrækkelig til at drage konklusioner eller til at bruge modellen til forudsigelser.
+
+
+
+```{r}
+#prøver at rette op på fejlgruppe. klart at grafen ser sådan ud, for desto mere jord der er af arabel land, pr. voksen uden børnene er regnet med
+
+
+data_2 <- mutate(women_data_sorted, arabel_land_kids_exluded=total_land/(household_members-kids))
+
+data_2
+
+
+
+```
+
+
+```{r}
+OK <-ggplot(data_2, aes(x = kids, y = arabel_land_kids_exluded)) +
+  geom_point(color = "blue", alpha = 0.6) +  
+  geom_smooth(method = "lm", color = "red", se = FALSE) +  # Tilføj en lineær regressionslinje i rød farve
+  labs(x = "Number of registered kids/woman", y = "Bunuaria of arable land (amount pr. registred person in the individual houshold, oh kids)") +   theme_minimal()
+
+#Udskriv plottet
+print(OK)
+
+# Beregn R²-værdien for den lineære regression
+model <- lm(arabel_land_kids_exluded ~ kids, data = data_2)
+summary(model)$r.squared
+```
+
+very very bad model!
+
+
+test settlement padderns, omregn land :
+
+
+
+
+
+
+test if there is any difference in the size of the household
+
+
